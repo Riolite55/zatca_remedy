@@ -55,32 +55,39 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  
+  /* ZATCA Brand Colors */
+  --primary: #2053a4; /* Royal Blue */
+  --primary-foreground: #ffffff;
+  --secondary: #f3f4f6; /* Light Gray/White */
+  --secondary-foreground: #1d3761; /* Dark Blue */
+  --muted: #f3f4f6;
+  --muted-foreground: #64748b;
+  --accent: #f0fdf4; /* Very light green tint */
+  --accent-foreground: #62b34f; /* Green */
+  --destructive: #ef4444;
+  
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #2053a4;
+  
+  /* ZATCA Chart Colors */
+  --chart-1: #2053a4; /* Royal Blue */
+  --chart-2: #4fbbbd; /* Teal */
+  --chart-3: #62b34f; /* Green */
+  --chart-4: #0996d4; /* Light Blue */
+  --chart-5: #1d3761; /* Dark Blue */
+  
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  
+  --sidebar: #1d3761; /* Dark Blue */
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #2053a4;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #2053a4;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #1d3761;
+  --sidebar-ring: #2053a4;
 }
 
 .dark {

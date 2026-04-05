@@ -1,0 +1,511 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Send, BarChart2, MessageSquare, Database, Sparkles, Loader2, Trash2, Pin, LayoutDashboard, RefreshCcw, Plus, Wand2, LogOut, Menu, ListEnd } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
+interface ChartDef {
+  id?: string;
+  title: string;
+  type: "metric" | "table" | "bar" | "pie" | "line";
+  sql_query: string;
+  x_col?: string;
+  y_col?: string;
+  data: any[];
+}
+
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  charts?: ChartDef[];
+}
+
+interface Dashboard {
+  id: string;
+  name: string;
+}
+
+interface Session {
+  id: string;
+  title: string;
+  updated_at: string;
+}
+
+const COLORS = ['#0ea5e9', '#f43f5e', '#10b981', '#f59e0b', '#8b5cf6', '#64748b'];
+
+const COLORS = ['#0ea5e9', '#f43f5e', '#10b981', '#f59e0b', '#8b5cf6', '#64748b'];
+
+export default function Home() {
+  // Chat State
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // Dashboards State
+  const [dashboards, setDashboards] = useState<Dashboard[]>([]);
+  const [selectedDashboard, setSelectedDashboard] = useState<string | null>(null);
+  const [dashboardWidgets, setDashboardWidgets] = useState<ChartDef[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  
+  // Pinning Dialog State
+  const [pinDialogOpen, setPinDialogOpen] = useState(false);
+  const [chartToPin, setChartToPin] = useState<ChartDef | null>(null);
+  const [newDashboardName, setNewDashboardName] = useState("");
+  const [pinTargetId, setPinTargetId] = useState<string>("");
+
+  useEffect(() => {
+    fetchDashboards();
+  }, []);
+
+  useEffect(() => {
+    if (selectedDashboard) {
+      refreshDashboard(selectedDashboard);
+    }
+  }, [selectedDashboard]);
+
+  const fetchDashboards = async () => {
+    const res = await fetch("http://localhost:8000/api/dashboards");
+    const data = await res.json();
+    setDashboards(data);
+    if (data.length > 0 && !selectedDashboard) {
+      setSelectedDashboard(data[0].id);
+      setPinTargetId(data[0].id);
+    }
+  };
+
+  const refreshDashboard = async (id: string) => {
+    setRefreshing(true);
+    try {
+      const res = await fetch(`http://localhost:8000/api/dashboards/${id}/refresh`);
+      const data = await res.json();
+      setDashboardWidgets(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleSimulate = async () => {
+    setRefreshing(true);
+    try {
+      await fetch("http://localhost:8000/api/simulate-activity", { method: "POST" });
+      if (selectedDashboard) {
+        await refreshDashboard(selectedDashboard);
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handlePin = async () => {
+    if (!chartToPin) return;
+    
+    let targetId = pinTargetId;
+    
+    // Create new dashboard if needed
+    if (targetId === "new" && newDashboardName.trim()) {
+      const res = await fetch("http://localhost:8000/api/dashboards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newDashboardName }),
+      });
+      const data = await res.json();
+      targetId = data.id;
+      await fetchDashboards();
+      setSelectedDashboard(targetId);
+    }
+
+    if (!targetId || targetId === "new") return;
+
+    // Pin the widget
+    await fetch(`http://localhost:8000/api/dashboards/${targetId}/widgets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: chartToPin.title,
+        type: chartToPin.type,
+        sql_query: chartToPin.sql_query,
+        x_col: chartToPin.x_col,
+        y_col: chartToPin.y_col
+      }),
+    });
+
+    setPinDialogOpen(false);
+    setChartToPin(null);
+    setNewDashboardName("");
+    if (selectedDashboard === targetId) {
+      refreshDashboard(targetId);
+    }
+  };
+
+  // Active chat dashboard shows charts from LAST assistant message
+  const activeChatDashboard = messages.filter(m => m.role === "assistant").pop();
+
+  const handleSend = async () => {
+    if (!input.trim()) return;
+
+    const userMsg = { role: "user" as const, content: input };
+    setMessages((prev) => [...prev, userMsg]);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("http://localhost:8000/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: userMsg.content }),
+      });
+
+      if (!res.ok) throw new Error("API Error");
+      
+      const data = await res.json();
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: data.message, charts: data.charts },
+      ]);
+    } catch (error) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Sorry, I encountered an error communicating with the API." },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClear = async () => {
+    await fetch("http://localhost:8000/api/clear", { method: "POST" });
+    setMessages([]);
+  };
+
+  const renderChart = (chart: ChartDef) => {
+    if (!chart.data || chart.data.length === 0) {
+      return <div className="p-4 text-center text-muted-foreground">No data returned for this query.</div>;
+    }
+
+    if (chart.type === "metric") {
+      const val = Object.values(chart.data[0])[0];
+      return (
+        <div className="flex flex-col items-center justify-center p-6 h-48">
+          <span className="text-5xl font-bold text-primary">{val as string}</span>
+        </div>
+      );
+    }
+
+    if (chart.type === "table") {
+      const headers = Object.keys(chart.data[0]);
+      return (
+        <ScrollArea className="h-64 rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {headers.map(h => <TableHead key={h}>{h}</TableHead>)}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {chart.data.map((row, i) => (
+                <TableRow key={i}>
+                  {headers.map(h => <TableCell key={h}>{row[h]}</TableCell>)}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </ScrollArea>
+      );
+    }
+
+    const xCol = chart.x_col || Object.keys(chart.data[0])[0];
+    const yCol = chart.y_col || Object.keys(chart.data[0])[1];
+
+    if (chart.type === "bar") {
+      return (
+        <div className="h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chart.data} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+              <XAxis dataKey={xCol} tick={{fontSize: 12}} interval={0} angle={-45} textAnchor="end" />
+              <YAxis />
+              <Tooltip cursor={{fill: 'transparent'}} contentStyle={{borderRadius: '8px'}} />
+              <Bar dataKey={yCol} fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      );
+    }
+
+    if (chart.type === "pie") {
+      return (
+        <div className="h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={chart.data} dataKey={yCol} nameKey={xCol} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2}>
+                {chart.data.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip contentStyle={{borderRadius: '8px'}} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      );
+    }
+
+    if (chart.type === "line") {
+      return (
+        <div className="h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chart.data} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+              <XAxis dataKey={xCol} tick={{fontSize: 12}} />
+              <YAxis />
+              <Tooltip contentStyle={{borderRadius: '8px'}} />
+              <Line type="monotone" dataKey={yCol} stroke="#8b5cf6" strokeWidth={3} dot={{r: 4}} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="h-screen w-full bg-slate-50 dark:bg-slate-950 overflow-hidden">
+      
+      {/* Pin Dialog */}
+      <Dialog open={pinDialogOpen} onOpenChange={setPinDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Pin to Dashboard</DialogTitle>
+            <DialogDescription>
+              Save "{chartToPin?.title}" to a persistent dashboard. It will automatically fetch fresh data.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Select Dashboard</Label>
+              <Select value={pinTargetId} onValueChange={(val) => setPinTargetId(val || "")}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a dashboard" />
+                </SelectTrigger>
+                <SelectContent>
+                  {dashboards.map(d => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                  <SelectItem value="new" className="text-blue-600 font-medium">+ Create New Dashboard</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {pinTargetId === "new" && (
+              <div className="space-y-2">
+                <Label>New Dashboard Name</Label>
+                <Input value={newDashboardName} onChange={e => setNewDashboardName(e.target.value)} placeholder="e.g. Daily Ops Review" />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPinDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handlePin} disabled={pinTargetId === "new" && !newDashboardName.trim()}>Pin Widget</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ResizablePanelGroup autoSaveId="dashboard-layout" direction="horizontal" className="h-full w-full">
+        
+        {/* LEFT PANEL: Chat Interface */}
+        <ResizablePanel defaultSize={35} minSize={25} maxSize={50}>
+          <div className="h-full flex flex-col border-r bg-white dark:bg-slate-900 shadow-sm z-10">
+            <div className="p-4 border-b flex items-center justify-between bg-slate-50 dark:bg-slate-950">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-blue-600 rounded-lg text-white">
+                  <Sparkles size={18} />
+                </div>
+                <div>
+                  <h1 className="font-semibold text-sm">Remedy AI Analyst</h1>
+                  <p className="text-xs text-muted-foreground">Powered by Gemini 2.5</p>
+                </div>
+              </div>
+              <Button variant="ghost" size="icon" onClick={handleClear} title="Clear Memory">
+                <Trash2 size={16} className="text-slate-400 hover:text-red-500" />
+              </Button>
+            </div>
+
+            <ScrollArea className="flex-1 p-4">
+              <div className="flex flex-col gap-4 pb-4">
+                {messages.length === 0 && (
+                  <div className="text-center mt-10 space-y-3">
+                    <Database className="mx-auto text-slate-300" size={48} />
+                    <h3 className="text-lg font-medium text-slate-700 dark:text-slate-200">Welcome to Remedy Analytics</h3>
+                    <p className="text-sm text-slate-500 max-w-[250px] mx-auto">
+                      Ask me questions about tickets, SLAs, support groups, or VIP customers.
+                    </p>
+                  </div>
+                )}
+                
+                {messages.map((msg, idx) => (
+                  <div key={idx} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${msg.role === 'user' ? 'bg-slate-800 text-white' : 'bg-blue-100 text-blue-600'}`}>
+                      {msg.role === 'user' ? <MessageSquare size={14} /> : <BarChart2 size={14} />}
+                    </div>
+                    <div className={`p-3 rounded-xl max-w-[85%] text-sm shadow-sm ${
+                      msg.role === 'user' 
+                        ? 'bg-slate-800 text-white rounded-tr-sm' 
+                        : 'bg-white border text-slate-800 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200 rounded-tl-sm'
+                    }`}>
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+                
+                {loading && (
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                      <Loader2 size={14} className="animate-spin" />
+                    </div>
+                    <div className="p-3 bg-white border rounded-xl rounded-tl-sm text-sm text-slate-500 shadow-sm flex items-center gap-2">
+                      Querying database...
+                    </div>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+
+            <div className="p-4 bg-white dark:bg-slate-900 border-t">
+              <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-2 relative">
+                <Input 
+                  value={input} 
+                  onChange={e => setInput(e.target.value)} 
+                  placeholder="Ask an analytical question..." 
+                  className="pr-10 rounded-full bg-slate-100 border-transparent focus-visible:ring-1 focus-visible:ring-blue-500"
+                  disabled={loading}
+                />
+                <Button 
+                  type="submit" 
+                  size="icon" 
+                  disabled={!input.trim() || loading}
+                  className="absolute right-1 top-1 w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-700"
+                >
+                  <Send size={14} />
+                </Button>
+              </form>
+            </div>
+          </div>
+        </ResizablePanel>
+
+        <ResizableHandle withHandle />
+
+        {/* RIGHT PANEL: Tabs (Canvas / Dashboards) */}
+        <ResizablePanel defaultSize={65}>
+          <div className="h-full flex flex-col bg-slate-50 dark:bg-slate-950 p-6 overflow-hidden">
+            <Tabs defaultValue="canvas" className="h-full flex flex-col">
+              <div className="flex justify-between items-center mb-6">
+                <TabsList>
+                  <TabsTrigger value="canvas" className="px-6">Chat Canvas</TabsTrigger>
+                  <TabsTrigger value="dashboards" className="px-6 flex items-center gap-2">
+                    <LayoutDashboard size={14}/> My Dashboards
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="dashboards" className="m-0 border-none p-0 focus-visible:ring-0">
+                  <div className="flex items-center gap-3">
+                    <Select value={selectedDashboard || ""} onValueChange={(val) => setSelectedDashboard(val || null)}>
+                      <SelectTrigger className="w-[200px] h-9 bg-white">
+                        <SelectValue placeholder="Select Dashboard" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {dashboards.map(d => (
+                          <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" size="sm" onClick={() => selectedDashboard && refreshDashboard(selectedDashboard)} disabled={!selectedDashboard || refreshing}>
+                      <RefreshCcw size={14} className={`mr-2 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
+                    </Button>
+                    <Button variant="secondary" size="sm" onClick={handleSimulate} disabled={refreshing} title="Simulate real Remedy activity to see live chart updates">
+                      <Wand2 size={14} className="mr-2 text-purple-500" /> Simulate Activity
+                    </Button>
+                  </div>
+                </TabsContent>
+              </div>
+
+              {/* CANVAS TAB */}
+              <TabsContent value="canvas" className="flex-1 overflow-y-auto outline-none">
+                {!activeChatDashboard || !activeChatDashboard.charts ? (
+                  <div className="h-full w-full flex flex-col items-center justify-center text-slate-400 mt-20">
+                    <BarChart2 size={64} className="mb-4 opacity-20" />
+                    <h2 className="text-xl font-semibold opacity-50">Dashboard Canvas</h2>
+                    <p className="text-sm opacity-50">Generate charts by chatting with the AI Analyst.</p>
+                  </div>
+                ) : (
+                  <div className="max-w-6xl mx-auto space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {activeChatDashboard.charts.map((chart, idx) => (
+                        <Card key={idx} className={`shadow-sm border-slate-200/60 bg-white ${chart.type === 'table' ? 'md:col-span-2' : ''}`}>
+                          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+                            <CardTitle className="text-lg font-medium text-slate-800 dark:text-slate-100 flex items-center gap-3">
+                              {chart.title}
+                              <Badge variant="outline" className="text-xs font-normal text-slate-500 bg-slate-50">{chart.type}</Badge>
+                            </CardTitle>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={() => {
+                              setChartToPin(chart);
+                              setPinDialogOpen(true);
+                            }}>
+                              <Pin size={16} />
+                            </Button>
+                          </CardHeader>
+                          <CardContent>
+                            {renderChart(chart)}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* DASHBOARDS TAB */}
+              <TabsContent value="dashboards" className="flex-1 overflow-y-auto outline-none">
+                {dashboards.length === 0 ? (
+                  <div className="h-full w-full flex flex-col items-center justify-center text-slate-400 mt-20">
+                    <LayoutDashboard size={64} className="mb-4 opacity-20" />
+                    <h2 className="text-xl font-semibold opacity-50">No Dashboards Yet</h2>
+                    <p className="text-sm opacity-50 mt-2">Pin a chart from the Chat Canvas to create your first persistent dashboard.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 pb-20">
+                    {dashboardWidgets.map((widget, idx) => (
+                      <Card key={idx} className={`shadow-sm border-slate-200/60 bg-white ${widget.type === 'table' ? 'xl:col-span-2' : ''}`}>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-lg font-medium text-slate-800">{widget.title}</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          {renderChart(widget)}
+                        </CardContent>
+                      </Card>
+                    ))}
+                    {dashboardWidgets.length === 0 && !refreshing && (
+                      <p className="text-slate-500 italic col-span-full">This dashboard has no widgets yet. Pin some from the chat canvas.</p>
+                    )}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
+        </ResizablePanel>
+
+      </ResizablePanelGroup>
+    </div>
+  );
+}
