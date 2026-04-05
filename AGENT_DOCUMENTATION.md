@@ -16,39 +16,26 @@ The AI Agent acts as an intelligent **Text-to-SQL Bridge** between the user and 
 
 ---
 
-## 2. Database Schema (Queryable Tables)
+## 2. Database Schema (Queryable Table)
 
-The Agent has full visibility into 5 relational tables mimicking the standard BMC Remedy AR System structure:
+The Agent has full visibility into a single table containing real BMC Remedy incident data (2000 tickets, 189 columns):
 
-### `hpd_help_desk` (Core Incidents)
-*The central table for all tickets.*
-* **Keys:** `Entry_ID` (PK), `Incident_ID` (e.g., 'INC000000000001'), `Person_ID` (FK to Users)
-* **Timestamps:** `Submit_Date`, `Closed_Date`, `Target_Date` (SLA deadline)
-* **Categorization:** `Status`, `Status_Reason`, `Priority`, `Urgency`, `Impact`, `Incident_Type`
-* **Assignment:** `Assigned_Group`, `Assignee_Login_ID`
-* **Customer Info:** `First_Name`, `Last_Name`, `Company`, `VIP` (Yes/No)
-* **SLM:** `SLM_Status` (e.g., 'Service Targets Met', 'Service Targets Breached')
+### `hpd_help_desk` (All Incidents)
+*The single source of truth for all ticket data — imported from real Remedy export.*
 
-### `hpd_worklog` (Activity & Notes)
-*Tracks updates, logs, and communications on incidents.*
-* **Keys:** `Work_Log_ID` (PK), `Incident_Number` (FK to hpd_help_desk.Incident_ID)
-* **Details:** `Submitter`, `Submit_Date`, `Summary`, `Notes`, `Activity_Type` (e.g., 'Resolution Communications')
+* **Identity:** `ENTRY_ID`, `INCIDENT_NUMBER` (e.g., 'INC678916')
+* **Timestamps:** `SUBMIT_DATE`, `SUBMIT_DATE_DATE`, `CLOSED_DATE_DATE`, `LAST_RESOLVED_DATE_DATE`, `REPORTED_DATE_DATE`, `RE_OPENED_DATE_DATE`
+* **Status:** `STATUS` (integer), `STATUS_DESCRIPTION` (text: 'Assigned', 'In Progress', 'Resolved', 'Closed', 'Canceled')
+* **Priority:** `PRIORITY` (integer), `PRIORITY_DESCRIPTION` (text: 'Medium', 'Low')
+* **Classification:** `URGENCY` (integer), `IMPACT` (integer), `CATEGORIZATION_TIER_1/2/3`, `REPORTED_SOURCE_DESC`
+* **Description:** `DESCRIPTION`, `DETAILED_DECRIPTION`, `RESOLUTION`, `RESOLUTION_CATEGORY`
+* **Assignment:** `ASSIGNED_GROUP` (e.g., 'Service Desk', 'E-invoicing L2'), `ASSIGNEE`, `ASSIGNEE_LOGIN_ID`, `ASSIGNED_SUPPORT_ORGANIZATION`
+* **Customer:** `FIRST_NAME`, `LAST_NAME`, `REQUESTER_NAME`, `COMPANY`, `ORGANIZATION`, `VIP` (0/1), `INTERNET_E_MAIL`
+* **SLA:** `SLM_STATUS_DESCRIPTION` ('Within Service Target', 'Service Target Breached'), `SLA_RESPONSE_STATUS`, `SLA_RESOLUTION_STATUS` ('Met', 'Missed', 'In Process')
+* **Transfers:** `GROUP_TRANSFERS`, `TOTAL_TRANSFERS`, `INDIVIDUAL_TRANSFERS`
+* **Aging:** `INCIDENT_AGING` (days), `REOPEN_COUNT`
 
-### `ctm_people` (Users & Staff)
-*Directory of all employees and requesters.*
-* **Keys:** `Person_ID` (PK), `Login_ID`
-* **Details:** `First_Name`, `Last_Name`, `Email_Address`, `Phone_Number_Business`
-* **Organization:** `Company`, `Department`, `VIP`
-
-### `ctm_support_group_assoc` (Support Mappings)
-*Maps staff to specific IT support groups.*
-* **Keys:** `Support_Group_Assoc_LookUp_ID` (PK), `Person_ID` (FK to ctm_people)
-* **Details:** `Support_Group_Name`, `Full_Name`
-
-### `sys_status_reason` (Lookup Table)
-*Maps status reason codes to readable text.*
-* **Keys:** `Status_Reason_ID` (PK)
-* **Details:** `Status_Reason_Menu_Item`
+> **IMPORTANT:** `STATUS`, `PRIORITY`, `URGENCY`, `IMPACT`, `SLM_STATUS`, `REPORTED_SOURCE`, and `VIP` are **numeric codes**. Always use the corresponding `_DESCRIPTION` / `_DESC` columns for human-readable text in queries.
 
 ---
 
@@ -80,22 +67,22 @@ Here is a list of questions you can ask the agent to test its capabilities:
 
 ### Simple Metrics (Single Numbers)
 * *"How many tickets are currently in the system?"*
-* *"Count the number of Critical priority incidents."*
-* *"How many SLAs have been breached?"*
+* *"Count the number of tickets with breached SLAs."*
+* *"How many tickets are currently assigned?"*
 
 ### Breakdowns (Pie & Bar Charts)
-* *"Show me a pie chart of all open tickets broken down by Support Group."*
-* *"Give me a bar chart of incidents grouped by Categorization (Incident Type)."*
-* *"Show the distribution of SLA Statuses for tickets assigned to the Service Desk."*
+* *"Show me a pie chart of tickets broken down by STATUS_DESCRIPTION."*
+* *"Give me a bar chart of incidents grouped by CATEGORIZATION_TIER_1."*
+* *"Show the distribution of SLA Resolution Statuses for tickets assigned to Service Desk."*
 
-### Multi-Table Joins (Complex Queries)
-* *"List the names, emails, and ticket summaries for all VIP users who have an open ticket."* *(Joins `hpd_help_desk` and `ctm_people`)*
-* *"Which Support Group has the most unresolved tickets?"* *(Aggregates `hpd_help_desk`)*
-* *"Show me the Worklog notes for Incident INC000000000014."* *(Queries `hpd_worklog`)*
-* *"How many tickets reported by Acme Corp employees are currently pending?"*
+### Detailed Queries
+* *"List the INCIDENT_NUMBER, REQUESTER_NAME, and DESCRIPTION for all VIP tickets."*
+* *"Which ASSIGNED_GROUP has the most unresolved tickets?"*
+* *"How many tickets have been reopened (REOPEN_COUNT > 0)?"*
+* *"Show me the top 10 longest-aging open tickets."*
 
 ### Trend Analysis (Line Charts)
-* *"Show me a line chart of tickets submitted per day over the last month."* *(Uses SQLite date functions to group by `Submit_Date`)*
+* *"Show me a line chart of tickets submitted per day over the last month."* *(Uses SQLite date functions to group by `SUBMIT_DATE_DATE`)*
 
 ---
 *Generated for the ZATCA Remedy AI Analyst PoC.*

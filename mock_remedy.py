@@ -17,57 +17,57 @@ async def get_incidents(authorization: Optional[str] = Header(None)):
     if not authorization or authorization != f"AR-JWT {MOCK_TOKEN}":
         raise HTTPException(status_code=401, detail="Unauthorized")
     
-    # Return a mocked set of tickets
+    # Return a mocked set of tickets matching real Remedy column names
     return {
         "entries": [
             {
                 "values": {
-                    "Incident Number": "INC000000000001",
-                    "Status": "New",
-                    "Description": "User cannot login to the VPN",
-                    "Priority": "High",
-                    "Categorization Tier 1": "Network",
-                    "Project_ID": "Project_Alpha"
+                    "INCIDENT_NUMBER": "INC678916",
+                    "STATUS_DESCRIPTION": "Assigned",
+                    "DESCRIPTION": "User cannot login to the VPN",
+                    "PRIORITY_DESCRIPTION": "Medium",
+                    "CATEGORIZATION_TIER_1": "Network",
+                    "ASSIGNED_GROUP": "Service Desk"
                 }
             },
             {
                 "values": {
-                    "Incident Number": "INC000000000002",
-                    "Status": "Assigned",
-                    "Description": "Requesting access to Project Alpha resources",
-                    "Priority": "Medium",
-                    "Categorization Tier 1": "Access",
-                    "Project_ID": "Project_Alpha"
+                    "INCIDENT_NUMBER": "INC666735",
+                    "STATUS_DESCRIPTION": "In Progress",
+                    "DESCRIPTION": "Requesting access to project resources",
+                    "PRIORITY_DESCRIPTION": "Medium",
+                    "CATEGORIZATION_TIER_1": "Application Support  - دعم التطبيقات",
+                    "ASSIGNED_GROUP": "Nibras 1 - L2"
                 }
             },
             {
                 "values": {
-                    "Incident Number": "INC000000000003",
-                    "Status": "Pending",
-                    "Description": "Server performance degraded",
-                    "Priority": "Critical",
-                    "Categorization Tier 1": "Hardware",
-                    "Project_ID": "Project_Beta"
+                    "INCIDENT_NUMBER": "INC661217",
+                    "STATUS_DESCRIPTION": "Resolved",
+                    "DESCRIPTION": "Server performance degraded",
+                    "PRIORITY_DESCRIPTION": "Low",
+                    "CATEGORIZATION_TIER_1": "IT Infrastructure And Systems",
+                    "ASSIGNED_GROUP": "E-invoicing L2"
                 }
             },
             {
                 "values": {
-                    "Incident Number": "INC000000000004",
-                    "Status": "Resolved",
-                    "Description": "Password reset for active directory",
-                    "Priority": "Low",
-                    "Categorization Tier 1": "Account",
-                    "Project_ID": "Project_Alpha"
+                    "INCIDENT_NUMBER": "INC700001",
+                    "STATUS_DESCRIPTION": "Closed",
+                    "DESCRIPTION": "Password reset for active directory",
+                    "PRIORITY_DESCRIPTION": "Low",
+                    "CATEGORIZATION_TIER_1": "Service Desk",
+                    "ASSIGNED_GROUP": "Service Desk"
                 }
             },
             {
                 "values": {
-                    "Incident Number": "INC000000000005",
-                    "Status": "Pending",
-                    "Description": "Awaiting vendor response for replacement switch",
-                    "Priority": "High",
-                    "Categorization Tier 1": "Hardware",
-                    "Project_ID": "Project_Alpha"
+                    "INCIDENT_NUMBER": "INC700002",
+                    "STATUS_DESCRIPTION": "Canceled",
+                    "DESCRIPTION": "Awaiting vendor response for replacement switch",
+                    "PRIORITY_DESCRIPTION": "Medium",
+                    "CATEGORIZATION_TIER_1": "IT Field Operations Support",
+                    "ASSIGNED_GROUP": "Field Support - PNU"
                 }
             }
         ]

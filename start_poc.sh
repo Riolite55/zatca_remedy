@@ -4,11 +4,8 @@
 # Ensure venv is activated
 source venv/bin/activate
 
-# Check if mock DB exists, create if not
-if [ ! -f remedy_mock.db ]; then
-    echo "Creating mock Remedy database..."
-    python setup_db.py
-fi
+# Setup database (creates app tables + imports Excel data if needed)
+python setup_db.py
 
 echo "🎫 Starting Remedy AI Analyst Dashboard (Streamlit)..."
 streamlit run poc_app.py

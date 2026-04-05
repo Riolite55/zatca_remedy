@@ -1,0 +1,17 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Database (recreated by setup_db.py)
+remedy_mock.db
+
+# Environment variables / secrets
+.env
+
+# Logs
+backend.log
+
+# Frontend
+node_modules/
+.next/
