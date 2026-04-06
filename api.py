@@ -327,6 +327,7 @@ def run_sql(query: str) -> List[Dict[str, Any]]:
     conn = sqlite3.connect('remedy_mock.db')
     try:
         df = pd.read_sql_query(query, conn)
+        df = df.fillna("")  # Replace NaN with empty string for JSON safety
         return df.to_dict(orient='records')
     finally:
         conn.close()
@@ -442,7 +443,7 @@ async def get_session_history(session_id: str, user_id: str = Depends(get_curren
         history = []
         for row in history_records:
             charts_json = row['charts_json']
-            charts = json.loads(charts_json) if charts_json else []
+            charts = json.loads(charts_json) if isinstance(charts_json, str) else []
             history.append({
                 "role": row['role'],
                 "content": row['content'],
@@ -530,6 +531,8 @@ async def chat_endpoint(request: ChatRequest, user_id: str = Depends(get_current
         
     except Exception as e:
         conn.rollback()
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
