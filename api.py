@@ -14,6 +14,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Auto-setup database on import (creates app tables + imports Excel data if needed)
+from setup_db import create_db as _setup_db, DB_PATH as _DB_PATH
+if not os.path.exists(_DB_PATH):
+    _setup_db()
+
 app = FastAPI(title="Remedy AI Analyst API")
 
 # Enable CORS for Next.js frontend
@@ -45,57 +50,237 @@ class RemedyDashboard(BaseModel):
 # PydanticAI Agent Setup
 # -----------------------------------------
 db_schema = """
-TABLE: hpd_help_desk (BMC Remedy Incident Table)
-- Entry_ID (TEXT PRIMARY KEY)
-- Incident_ID (TEXT) e.g., 'INC000000000001'
-- Submit_Date (DATETIME) e.g., '2023-10-25 14:00:00'
-- Closed_Date (DATETIME)
-- Target_Date (DATETIME) - Expected SLA resolution
-- Status (TEXT) e.g., 'New', 'Assigned', 'In Progress', 'Pending', 'Resolved', 'Closed', 'Cancelled'
-- Status_Reason (TEXT)
-- Priority (TEXT) e.g., 'Critical', 'High', 'Medium', 'Low'
-- Urgency (TEXT)
-- Impact (TEXT)
-- Assigned_Group (TEXT) e.g., 'Service Desk', 'Network Ops'
-- Assignee_Login_ID (TEXT)
-- First_Name (TEXT) - Customer First Name
-- Last_Name (TEXT) - Customer Last Name
-- Company (TEXT) - Customer Company
-- VIP (TEXT) - e.g., 'Yes' or 'No'
-- Incident_Type (TEXT)
-- Reported_Source (TEXT)
-- Person_ID (TEXT) - FK to ctm_people
-- SLM_Status (TEXT) e.g., 'Service Targets Met', 'Service Targets Breached'
+TABLE: hpd_help_desk (BMC Remedy Incident Table — 2000 real tickets, single table)
 
-TABLE: hpd_worklog (Incident Activity/Notes)
-- Work_Log_ID (TEXT PRIMARY KEY)
-- Submit_Date (DATETIME)
-- Submitter (TEXT)
-- Incident_Number (TEXT) - FK to hpd_help_desk.Incident_ID
-- Summary (TEXT)
-- Notes (TEXT)
-- Activity_Type (TEXT) e.g., 'General Information', 'Resolution Communications'
+-- Identity & Source
+- TICKET_SOURCE (TEXT)
+- ENTRY_ID (TEXT) - Internal entry ID
+- INCIDENT_NUMBER (TEXT) e.g., 'INC678916'
 
-TABLE: ctm_people (Users/Staff Information)
-- Person_ID (TEXT PRIMARY KEY)
-- Login_ID (TEXT)
-- Company (TEXT)
-- Department (TEXT)
-- First_Name (TEXT)
-- Last_Name (TEXT)
-- Email_Address (TEXT)
-- Phone_Number_Business (TEXT)
-- VIP (TEXT) - e.g., 'Yes' or 'No'
+-- Submitter & Dates
+- SUBMITTER (TEXT)
+- ORIGINAL_DATE (INTEGER)
+- SUBMIT_DATE (TIMESTAMP)
+- SUBMIT_DATE_DATE (TIMESTAMP) - Date-only version
+- SUBMIT_DATE_TIMESTAMP (TEXT)
+- LAST_GROUP_ASSIGNED_DATE (REAL)
+- LAST_GROUP_ASSIGNED_DATE_DATE (TIMESTAMP)
+- LAST_GROUP_ASSIGNED_DATE_TIMESTAMP (TEXT)
+- REPORTED_DATE (INTEGER)
+- REPORTED_DATE_DATE (TIMESTAMP)
+- REPORTED_DATE_TIMESTAMP (TEXT)
 
-TABLE: ctm_support_group_assoc (Support Group Mappings)
-- Support_Group_Assoc_LookUp_ID (TEXT PRIMARY KEY)
-- Support_Group_Name (TEXT)
-- Full_Name (TEXT)
-- Person_ID (TEXT) - FK to ctm_people
+-- Modification
+- LAST_MODIFIED_BY (TEXT)
+- LAST_MODIFIED_DATE (INTEGER)
+- LAST_MODIFIED_DATE_DATE (TIMESTAMP)
+- LAST_MODIFIED_DATE_TIMESTAMP (TEXT)
 
-TABLE: sys_status_reason (Lookup for Status Reasons)
-- Status_Reason_ID (TEXT PRIMARY KEY)
-- Status_Reason_Menu_Item (TEXT)
+-- Status & Classification
+- STATUS (INTEGER) - Numeric code. Use STATUS_DESCRIPTION for text.
+- STATUS_DESCRIPTION (TEXT) e.g., 'Assigned', 'In Progress', 'Resolved', 'Closed', 'Canceled'
+- PREVIOUSSTATUS (REAL)
+- STATUS_REASON (REAL)
+- STATUS_REASON_DESC (TEXT)
+- PRIORITY (INTEGER) - Numeric code. Use PRIORITY_DESCRIPTION for text.
+- PRIORITY_DESCRIPTION (TEXT) e.g., 'Medium', 'Low'
+- PRIORITY_WEIGHT (INTEGER)
+- URGENCY (INTEGER) - Numeric code (3000, 4000)
+- IMPACT (INTEGER) - Numeric code (3000, 4000)
+- CATEGORIZATION_TIER_1 (TEXT) e.g., 'Application Support', 'Service Desk', 'Network'
+- CATEGORIZATION_TIER_2 (TEXT)
+- CATEGORIZATION_TIER_3 (TEXT)
+- PRODUCT_CATEGORIZATION_TIER_1 (TEXT)
+- PRODUCT_CATEGORIZATION_TIER_2 (TEXT)
+- PRODUCT_CATEGORIZATION_TIER_3 (TEXT)
+- REPORTED_SOURCE (INTEGER) - Numeric code. Use REPORTED_SOURCE_DESC for text.
+- REPORTED_SOURCE_DESC (TEXT) e.g., 'CRM', 'Diwan', 'Web', 'Email', 'SolarWinds', 'Systems Management'
+- TICKETTYPE (INTEGER)
+- SERVICE_TYPE (INTEGER)
+- CURRENTSTAGENUMBER (INTEGER)
+- STAGECONDITION (TEXT)
+- GAZT_CAN_UPDATE_PRIORITY (REAL)
+- GAZT_COUNTED__C (INTEGER)
+- GAZT_CURRENTINCIDENTSCOUNT2 (REAL)
+
+-- Description & Resolution
+- DESCRIPTION (TEXT) - Ticket description/summary
+- DETAILED_DECRIPTION (TEXT)
+- RESOLUTION (TEXT)
+- RESOLUTION_CATEGORY (TEXT)
+- REASON_DESCRIPTION (TEXT)
+- REASON_CODE (TEXT)
+
+-- Assignment
+- ASSIGNED_GROUP (TEXT) e.g., 'Service Desk', 'E-invoicing L2', 'Nibras 1 - L2'
+- ASSIGNED_GROUP_ID (TEXT)
+- ASSIGNEE (TEXT) - Assigned person name
+- ASSIGNEE_LOGIN_ID (TEXT)
+- ASSIGNEE_ID (TEXT)
+- ASSIGNEE_GROUPS (TEXT)
+- ASSIGNEE_SELECT_FORM (TEXT)
+- ASSIGNED_SUPPORT_COMPANY (TEXT)
+- ASSIGNED_SUPPORT_ORGANIZATION (TEXT)
+- OWNER_GROUP (TEXT)
+- OWNER_GROUP_ID (TEXT)
+- OWNER_SUPPORT_COMPANY (TEXT)
+- OWNER_SUPPORT_ORGANIZATION (TEXT)
+- SUPPORT_GROUP_ROLE (TEXT)
+- ENABLE_ASSIGNMENT_ENGINE (INTEGER)
+- ASSIGN_TO_VENDOR (INTEGER)
+- ESCHAT_SET_AUTO_ASSIGN (INTEGER)
+
+-- Customer / Requester Info
+- FIRST_NAME (TEXT)
+- LAST_NAME (TEXT)
+- REQUESTER_NAME (TEXT) - Full requester name
+- COMPANY (TEXT)
+- ORGANIZATION (TEXT)
+- CONTACT_COMPANY (TEXT)
+- CONTACT_CLIENT_TYPE (INTEGER)
+- CONTACT_SENSITIVITY (INTEGER)
+- COUNTRY (TEXT)
+- STATE_PROVINCE (REAL)
+- CITY (TEXT)
+- REGION (TEXT)
+- SITE (TEXT)
+- SITE_ID (TEXT)
+- SITE_GROUP (TEXT)
+- PERSON_ID (TEXT)
+- LOGIN_ID (TEXT)
+- CUSTOMER_LOGIN_ID (TEXT)
+- CORPORATE_ID (TEXT)
+- INTERNET_E_MAIL (TEXT)
+- PHONE_NUMBER (TEXT)
+- VIP (INTEGER) - 0 or 1
+- FLAG_CREATE_REQUEST (INTEGER)
+
+-- Direct Contact Info
+- DIRECT_CONTACT_FIRST_NAME (TEXT)
+- DIRECT_CONTACT_LAST_NAME (TEXT)
+- DIRECT_CONTACT_COMPANY (TEXT)
+- DIRECT_CONTACT_ORGANIZATION (TEXT)
+- DIRECT_CONTACT_PHONE_NUMBER (TEXT)
+- DIRECT_CONTACT_SITE (TEXT)
+- DIRECT_CONTACT_PERSON_ID (TEXT)
+- DIRECT_CONTACT_REGION (TEXT)
+- DIRECT_CONTACT_SITE_GROUP (TEXT)
+- DIRECT_CONTACT_LOGIN_ID (TEXT)
+- DIRECT_CONTACT_INTERNET_E_MAIL (TEXT)
+- DIRECT_CONTACT_CORPORATE_ID (TEXT)
+
+-- SLA & SLM
+- SLM_STATUS (INTEGER) - Numeric code. Use SLM_STATUS_DESCRIPTION for text.
+- SLM_STATUS_DESCRIPTION (TEXT) e.g., 'Within Service Target', 'Service Target Breached'
+- SLM_PRIORITY (INTEGER)
+- SLA_RESPONSE_STATUS (TEXT) e.g., 'Met', 'Missed', 'In Process', 'Missed Goal'
+- SLA_RESOLUTION_STATUS (TEXT) e.g., 'Met', 'Missed', 'In Process', 'Missed Goal'
+- TCS_SLA_RESPONSE_STATUS (TEXT)
+- TCS_SLA_RESOLUTION_STATUS (TEXT)
+- SLA_RES_BUSINESS_HOUR_SECONDS (INTEGER)
+- SLA_RESPONDED (REAL)
+- SLA_HOLD (INTEGER)
+- OLA_HOLD (INTEGER)
+- SLMEVENTLOOKUPTBLKEYWORD (TEXT)
+- SLMLOOKUPTBLKEYWORD (TEXT)
+- LOOKUPKEYWORD (TEXT)
+- ONWER_GROUP_USES_SLA (REAL)
+
+-- Work In Progress Dates
+- FIRSTWIPDATE (REAL)
+- FIRSTWIPDATE_DATE (TIMESTAMP)
+- FIRSTWIPDATE_TIMESTAMP (TEXT)
+- LASTWIPDATE (REAL)
+- LASTWIPDATE_DATE (TIMESTAMP)
+- LASTWIPDATE_TIMESTAMP (TEXT)
+
+-- Resolution & Closure Dates
+- LAST_RESOLVED_DATE (REAL)
+- LAST_RESOLVED_DATE_DATE (TIMESTAMP)
+- LAST_RESOLVED_DATE_TIMESTAMP (TEXT)
+- CLOSED_DATE (REAL)
+- CLOSED_DATE_DATE (TIMESTAMP)
+- CLOSED_DATE_TIMESTAMP (TEXT)
+- RE_OPENED_DATE (REAL)
+- RE_OPENED_DATE_DATE (TIMESTAMP)
+- RE_OPENED_DATE_TIMESTAMP (TEXT)
+- REOPEN_DATE (TIMESTAMP)
+
+-- Transfers & Escalation
+- GROUP_TRANSFERS (INTEGER)
+- TOTAL_TRANSFERS (INTEGER)
+- INDIVIDUAL_TRANSFERS (INTEGER)
+- TOTAL_ESCALATION_LEVEL (INTEGER)
+- TOTAL_OLA_RESOLUTION_ESC_LEVEL (INTEGER)
+- TOTAL_OLA_ACKNOWLEDGEESC_LEVEL (INTEGER)
+- ESCALATED_ (INTEGER)
+- REASSIGNED_FROM_DIFFRENT_ORGAN (INTEGER)
+- PREV_SUPPORT_ORGANIZATION (TEXT)
+- FIRST_SUPPORT_ORGANIZATION (TEXT)
+- ORGANIZATION_REASSIGN_DATE (TIMESTAMP)
+- ORGANIZATION_REASSIGN_DATE_DATE (TIMESTAMP)
+- ORGANIZATION_REASSIGN_DATE_TIMESTAMP (TEXT)
+
+-- Aging & Reopen
+- INCIDENT_AGING (INTEGER) - Age in days
+- INCIDENT_AGING_HOUR (INTEGER)
+- INCIDENT_AGING_MIN (INTEGER)
+- REOPEN_COUNT (INTEGER)
+- INC_REOPEN_COUNT (INTEGER)
+
+-- Effort & Time
+- EFFORTDURATIONHOUR (REAL)
+- EFFORT_TIME_SPENT_MINUTES (INTEGER)
+- TOTAL_TIME_SPENT (INTEGER)
+- INCAUTOCLOSERESOLVED_SEC (INTEGER)
+- LAST_DATE_DURATION_CALCULATED (INTEGER)
+- LAST_DATE_D_C_DATE (TIMESTAMP)
+- LAST_DATE_D_C_TIMESTAMP (TEXT)
+
+-- Escalation Notifications
+- ASSIGNEE_REMINDER_SENT (TEXT)
+- SECTION_HEAD_ESCALATION_SENT (TEXT)
+- DIRECTOR_ESCALATION_SENT (TEXT)
+
+-- Communication Counts
+- OUTBOUND (INTEGER)
+- INBOUND (INTEGER)
+
+-- Template & Wizard
+- HPD_TEMPLATE_ID (TEXT)
+- Z1D_TEMPLATE_NAME (TEXT)
+- CREATED_FROM_TEMPLATE (INTEGER)
+- CREATED_FROM_FLAG (REAL)
+- ABYDOS_USE_WIZARD_ (INTEGER)
+- ABYDOS_TASKS_GENERATED (INTEGER)
+- ABYDOS_AUDITFLAG (INTEGER)
+- CREATE_IMPACTED_AREA_FROM_CUST (INTEGER)
+- SHOW_FOR_PROCESS (TEXT)
+- Z1D_VISPROCESSFLOWVIEW (TEXT)
+
+-- Miscellaneous
+- DR (INTEGER)
+- EH (INTEGER)
+- RETURN_CODE (REAL)
+- UNKNOWNUSER (INTEGER)
+- WEB_INCIDENT_ID (TEXT)
+- TOTAL_FIELDS_COUNT (INTEGER)
+- Z1D_TOTALCRITICALINCIDENTSCOUN (REAL)
+- SRID (TEXT)
+- SRD_INSTANCE_ID (TEXT)
+- INFRASTRUCTUREEVENTTYPE (INTEGER)
+- RELATED_INC (REAL)
+- RELATED_PBI (REAL)
+- RELATED_CRQ (REAL)
+- SECURITY_TECHNOLOGY (TEXT)
+
+-- Port / Location
+- PORT_REGION (TEXT)
+- PORT_CLASSFICATION (TEXT)
+- PORT_NAME (TEXT)
+
+IMPORTANT: STATUS, PRIORITY, URGENCY, IMPACT, SLM_STATUS, REPORTED_SOURCE, and VIP are numeric codes.
+Always use the corresponding _DESCRIPTION / _DESC columns for human-readable text in WHERE clauses and display.
 """
 
 agent = Agent(
@@ -105,14 +290,13 @@ agent = Agent(
         "You are an expert Data Analyst and AI Assistant for BMC Remedy ITSM. "
         "Your goal is to answer user questions about IT tickets, statuses, SLA delays, group performance, etc. "
         "You MUST translate their request into a valid, beautiful analytical dashboard response. "
-        "You have access to a local SQLite database representing 5 relational tables: "
-        "hpd_help_desk, hpd_worklog, ctm_people, ctm_support_group_assoc, and sys_status_reason.\n\n"
+        "You have access to a local SQLite database with a single table: hpd_help_desk (2000 real incident tickets).\n\n"
         f"Database Schema:\n{db_schema}\n\n"
         "Guidelines:\n"
         "1. You MUST use the `execute_sql` tool to query the database and find the EXACT numbers or insights BEFORE constructing your final response.\n"
         "2. The `message` field of your response MUST include the actual data values you found (e.g., 'There are exactly 13 pending tickets for SecOps.'). Do not just say 'Here is the summary'.\n"
-        "3. Write highly accurate SQLite queries.\n"
-        "4. JOIN tables when necessary (e.g. hpd_help_desk.Person_ID = ctm_people.Person_ID, or hpd_help_desk.Incident_ID = hpd_worklog.Incident_Number).\n"
+        "3. Write highly accurate SQLite queries against the single hpd_help_desk table.\n"
+        "4. STATUS, PRIORITY, URGENCY, IMPACT, SLM_STATUS, REPORTED_SOURCE, and VIP are numeric codes. Always use the _DESCRIPTION/_DESC columns for filtering and display (e.g., STATUS_DESCRIPTION = 'Closed', not STATUS = 'Closed').\n"
         "5. If the user asks for a total count, include a 'metric' chart type (returns 1 row, 1 column).\n"
         "6. If they ask for a breakdown (e.g., 'by priority'), use a 'bar' or 'pie' chart.\n"
         "7. If they ask for a list of specific tickets, use a 'table'.\n"
@@ -143,6 +327,7 @@ def run_sql(query: str) -> List[Dict[str, Any]]:
     conn = sqlite3.connect('remedy_mock.db')
     try:
         df = pd.read_sql_query(query, conn)
+        df = df.fillna("")  # Replace NaN with empty string for JSON safety
         return df.to_dict(orient='records')
     finally:
         conn.close()
@@ -258,7 +443,7 @@ async def get_session_history(session_id: str, user_id: str = Depends(get_curren
         history = []
         for row in history_records:
             charts_json = row['charts_json']
-            charts = json.loads(charts_json) if charts_json else []
+            charts = json.loads(charts_json) if isinstance(charts_json, str) else []
             history.append({
                 "role": row['role'],
                 "content": row['content'],
@@ -346,6 +531,8 @@ async def chat_endpoint(request: ChatRequest, user_id: str = Depends(get_current
         
     except Exception as e:
         conn.rollback()
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
@@ -499,29 +686,32 @@ async def simulate_activity():
     conn = sqlite3.connect('remedy_mock.db')
     c = conn.cursor()
     try:
-        # 1. Close a random 'Pending' or 'In Progress' ticket
-        c.execute("SELECT Incident_ID FROM hpd_help_desk WHERE Status IN ('Pending', 'In Progress') ORDER BY RANDOM() LIMIT 1")
+        # 1. Resolve a random 'Assigned' or 'In Progress' ticket
+        c.execute("SELECT INCIDENT_NUMBER FROM hpd_help_desk WHERE STATUS_DESCRIPTION IN ('Assigned', 'In Progress') ORDER BY RANDOM() LIMIT 1")
         row = c.fetchone()
         if row:
-            inc_id = row[0]
-            c.execute("UPDATE hpd_help_desk SET Status = 'Resolved', Closed_Date = ? WHERE Incident_ID = ?", 
-                     (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), inc_id))
-            # Add a worklog for the resolution
-            wl_id = f"WL{str(uuid.uuid4())[:8]}"
-            c.execute("""
-                INSERT INTO hpd_worklog (Work_Log_ID, Submit_Date, Submitter, Incident_Number, Summary, Notes, Activity_Type)
-                VALUES (?, ?, 'System', ?, 'Auto-resolved by simulation', 'Fixed issue.', 'Resolution Communications')
-            """, (wl_id, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), inc_id))
+            inc_num = row[0]
+            c.execute("""UPDATE hpd_help_desk
+                         SET STATUS = 4, STATUS_DESCRIPTION = 'Resolved',
+                             CLOSED_DATE_DATE = ?, LAST_RESOLVED_DATE_DATE = ?
+                         WHERE INCIDENT_NUMBER = ?""",
+                     (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                      datetime.now().strftime('%Y-%m-%d %H:%M:%S'), inc_num))
 
-        # 2. Open a new 'Critical' ticket
-        new_inc_id = f"INC{str(random.randint(900000, 999999)).zfill(12)}"
+        # 2. Open a new ticket
+        new_inc_num = f"INC{random.randint(900000, 999999)}"
         c.execute("""
-            INSERT INTO hpd_help_desk 
-            (Entry_ID, Incident_ID, Submit_Date, Status, Priority, Summary, Incident_Type, Reported_Source)
-            VALUES (?, ?, ?, 'New', 'Critical', 'URGENT: Database offline (Simulation)', 'User Service Restoration', 'System Alert')
-        """, (f"ENT{random.randint(90000, 99999)}", new_inc_id, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+            INSERT INTO hpd_help_desk
+            (ENTRY_ID, INCIDENT_NUMBER, SUBMIT_DATE, SUBMIT_DATE_DATE,
+             STATUS, STATUS_DESCRIPTION, PRIORITY, PRIORITY_DESCRIPTION,
+             DESCRIPTION, REPORTED_SOURCE_DESC)
+            VALUES (?, ?, ?, ?, 1, 'Assigned', 2, 'Medium',
+                    'URGENT: Database offline (Simulation)', 'Web')
+        """, (f"ENT{random.randint(90000, 99999)}", new_inc_num,
+              datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+              datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
 
         conn.commit()
-        return {"status": "Simulated 1 resolved ticket and 1 new critical ticket."}
+        return {"status": "Simulated 1 resolved ticket and 1 new ticket."}
     finally:
         conn.close()
