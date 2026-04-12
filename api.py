@@ -45,6 +45,7 @@ class ChartDef(BaseModel):
 class RemedyDashboard(BaseModel):
     message: str = Field(description="A brief analytical summary answering the user's question, placed at the top of the dashboard.")
     charts: List[ChartDef] = Field(description="A list of 1 to 3 charts/metrics to display to support the analysis.")
+    follow_ups: List[str] = Field(description="A list of 2-3 natural follow-up questions the user might want to ask next, based on the current analysis.")
 
 # -----------------------------------------
 # PydanticAI Agent Setup
@@ -301,7 +302,8 @@ agent = Agent(
         "6. If they ask for a breakdown (e.g., 'by priority'), use a 'bar' or 'pie' chart.\n"
         "7. If they ask for a list of specific tickets, use a 'table'.\n"
         "8. Always use `AS count` or similar aliases in your SQL to make columns predictable.\n"
-        "9. Do not wrap column names in quotes unless necessary."
+        "9. Do not wrap column names in quotes unless necessary.\n"
+        "10. You MUST always include 2-3 relevant follow-up questions in the `follow_ups` field. These should be natural next questions the user might want to explore based on the current analysis. Make them specific and actionable."
     )
 )
 
@@ -363,6 +365,19 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid auth credentials")
 
+def get_user_info(user_id: str) -> Dict[str, Any]:
+    """Get role and department for a user."""
+    conn = sqlite3.connect('remedy_mock.db')
+    try:
+        c = conn.cursor()
+        c.execute("SELECT role, department FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        if not row:
+            return {"role": "admin", "department": None}
+        return {"role": row[0], "department": row[1]}
+    finally:
+        conn.close()
+
 # -----------------------------------------
 # API Endpoints
 # -----------------------------------------
@@ -383,6 +398,7 @@ class ChatResponse(BaseModel):
     message: str
     charts: List[ChartResponse]
     session_id: str
+    follow_ups: List[str] = []
 
 class AuthRequest(BaseModel):
     username: str
@@ -395,11 +411,11 @@ async def register(user: AuthRequest):
     try:
         user_id = str(uuid.uuid4())
         hashed = get_password_hash(user.password)
-        c.execute("INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)",
-                  (user_id, user.username, hashed, datetime.now().isoformat()))
+        c.execute("INSERT INTO users (id, username, password_hash, role, department, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                  (user_id, user.username, hashed, "admin", None, datetime.now().isoformat()))
         conn.commit()
         token = jwt.encode({"sub": user_id}, SECRET_KEY, algorithm=ALGORITHM)
-        return {"access_token": token, "token_type": "bearer", "username": user.username}
+        return {"access_token": token, "token_type": "bearer", "username": user.username, "role": "admin", "department": None}
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=400, detail="Username already exists")
     finally:
@@ -410,12 +426,12 @@ async def login(user: AuthRequest):
     conn = sqlite3.connect('remedy_mock.db')
     c = conn.cursor()
     try:
-        c.execute("SELECT id, password_hash FROM users WHERE username = ?", (user.username,))
+        c.execute("SELECT id, password_hash, role, department FROM users WHERE username = ?", (user.username,))
         row = c.fetchone()
         if not row or not verify_password(user.password, row[1]):
             raise HTTPException(status_code=401, detail="Incorrect username or password")
         token = jwt.encode({"sub": row[0]}, SECRET_KEY, algorithm=ALGORITHM)
-        return {"access_token": token, "token_type": "bearer", "username": user.username}
+        return {"access_token": token, "token_type": "bearer", "username": user.username, "role": row[2], "department": row[3]}
     finally:
         conn.close()
 
@@ -488,9 +504,16 @@ async def chat_endpoint(request: ChatRequest, user_id: str = Depends(get_current
                  (msg_id, session_id, "user", request.prompt, None, datetime.now().isoformat()))
         conn.commit()
 
-        # 3. Run the agent with history (from in-memory cache for now to avoid reconstructing Pydantic Objects)
+        # 3. Run the agent with history, injecting department context if applicable
+        user_info = get_user_info(user_id)
+        department = user_info.get("department")
+        prompt = request.prompt
+        if department:
+            dept_display = department.replace("_", " ")
+            prompt = f"[STRICT ACCESS CONTROL: This user is a manager of the '{department}' department ONLY. You MUST always include WHERE ASSIGNED_GROUP = '{department}' in every SQL query. If the user asks about other departments, groups, or data outside '{department}', politely decline and say: 'You only have access to {dept_display} data. Please contact an administrator for cross-department analytics.' NEVER generate SQL without filtering by ASSIGNED_GROUP = '{department}'.]\n\n{request.prompt}"
+
         history = session_histories.get(session_id, [])
-        result = await agent.run(request.prompt, message_history=history)
+        result = await agent.run(prompt, message_history=history)
         
         # Save updated history back to cache
         session_histories[session_id] = result.all_messages()
@@ -526,7 +549,8 @@ async def chat_endpoint(request: ChatRequest, user_id: str = Depends(get_current
         return ChatResponse(
             message=dashboard.message,
             charts=populated_charts,
-            session_id=session_id
+            session_id=session_id,
+            follow_ups=dashboard.follow_ups
         )
         
     except Exception as e:
@@ -678,6 +702,80 @@ async def refresh_dashboard(dashboard_id: str, user_id: str = Depends(get_curren
         conn.close()
 
 
+
+@app.get("/api/persona/kpis")
+async def get_persona_kpis(user_id: str = Depends(get_current_user)):
+    """Returns predefined KPI data scoped to the user's department (or global for admin)."""
+    user_info = get_user_info(user_id)
+    department = user_info["department"]
+    conn = sqlite3.connect('remedy_mock.db')
+    try:
+        if department:
+            # Scoped KPIs for department manager
+            df_total = pd.read_sql_query("SELECT COUNT(*) as value FROM hpd_help_desk WHERE ASSIGNED_GROUP = ?", conn, params=[department])
+            df_open = pd.read_sql_query("SELECT COUNT(*) as value FROM hpd_help_desk WHERE ASSIGNED_GROUP = ? AND STATUS_DESCRIPTION NOT IN ('Closed','Resolved','Canceled')", conn, params=[department])
+            df_sla_met = pd.read_sql_query("SELECT COUNT(*) as value FROM hpd_help_desk WHERE ASSIGNED_GROUP = ? AND SLA_RESOLUTION_STATUS = 'Met'", conn, params=[department])
+            df_sla_missed = pd.read_sql_query("SELECT COUNT(*) as value FROM hpd_help_desk WHERE ASSIGNED_GROUP = ? AND SLA_RESOLUTION_STATUS = 'Missed'", conn, params=[department])
+            df_top_assignee = pd.read_sql_query("SELECT ASSIGNEE as name, COUNT(*) as count FROM hpd_help_desk WHERE ASSIGNED_GROUP = ? AND ASSIGNEE IS NOT NULL AND ASSIGNEE != '' GROUP BY ASSIGNEE ORDER BY count DESC LIMIT 1", conn, params=[department])
+
+            total = int(df_total.iloc[0]['value'])
+            sla_met = int(df_sla_met.iloc[0]['value'])
+            sla_missed = int(df_sla_missed.iloc[0]['value'])
+            sla_total = sla_met + sla_missed
+            sla_rate = round((sla_met / sla_total * 100), 1) if sla_total > 0 else 100.0
+
+            kpis = [
+                {"label": "Total Tickets", "value": total, "type": "number"},
+                {"label": "Open Tickets", "value": int(df_open.iloc[0]['value']), "type": "number"},
+                {"label": "SLA Met Rate", "value": f"{sla_rate}%", "type": "percentage"},
+                {"label": "SLA Breaches", "value": sla_missed, "type": "number"},
+                {"label": "Top Assignee", "value": f"{df_top_assignee.iloc[0]['name'].strip()} ({int(df_top_assignee.iloc[0]['count'])})" if not df_top_assignee.empty else "N/A", "type": "text"},
+            ]
+        else:
+            # Global KPIs for admin
+            df_total = pd.read_sql_query("SELECT COUNT(*) as value FROM hpd_help_desk", conn)
+            df_open = pd.read_sql_query("SELECT COUNT(*) as value FROM hpd_help_desk WHERE STATUS_DESCRIPTION NOT IN ('Closed','Resolved','Canceled')", conn)
+            df_sla_breached = pd.read_sql_query("SELECT COUNT(*) as value FROM hpd_help_desk WHERE SLA_RESOLUTION_STATUS = 'Missed'", conn)
+            df_top_group = pd.read_sql_query("SELECT ASSIGNED_GROUP as name, COUNT(*) as count FROM hpd_help_desk GROUP BY ASSIGNED_GROUP ORDER BY count DESC LIMIT 1", conn)
+            df_breach_group = pd.read_sql_query("SELECT ASSIGNED_GROUP as name, COUNT(*) as count FROM hpd_help_desk WHERE SLA_RESOLUTION_STATUS = 'Missed' GROUP BY ASSIGNED_GROUP ORDER BY count DESC LIMIT 1", conn)
+
+            kpis = [
+                {"label": "Total Tickets", "value": int(df_total.iloc[0]['value']), "type": "number"},
+                {"label": "Open Tickets", "value": int(df_open.iloc[0]['value']), "type": "number"},
+                {"label": "SLA Breaches", "value": int(df_sla_breached.iloc[0]['value']), "type": "number"},
+                {"label": "Busiest Group", "value": f"{df_top_group.iloc[0]['name']} ({int(df_top_group.iloc[0]['count'])})" if not df_top_group.empty else "N/A", "type": "text"},
+                {"label": "Top Breaching Group", "value": f"{df_breach_group.iloc[0]['name']} ({int(df_breach_group.iloc[0]['count'])})" if not df_breach_group.empty else "None", "type": "text"},
+            ]
+
+        return {"kpis": kpis, "department": department, "role": user_info["role"]}
+    finally:
+        conn.close()
+
+@app.get("/api/persona/suggestions")
+async def get_persona_suggestions(user_id: str = Depends(get_current_user)):
+    """Returns predefined suggested questions based on user's role/department."""
+    user_info = get_user_info(user_id)
+    department = user_info["department"]
+
+    if department:
+        dept_display = department.replace("_", " ")
+        suggestions = [
+            f"How many {dept_display} tickets are still open?",
+            f"Show me ticket volume by assignee for my team",
+            f"Which tickets have breached SLA in my department?",
+            f"Break down {dept_display} tickets by status",
+            f"List recent resolved tickets in my department",
+        ]
+    else:
+        suggestions = [
+            "Show me ticket breakdown by department",
+            "Which groups have SLA breaches?",
+            "What's the overall ticket status distribution?",
+            "Show me the top 10 oldest unresolved tickets",
+            "Compare SLA performance across all groups",
+        ]
+
+    return {"suggestions": suggestions, "department": department, "role": user_info["role"]}
 
 @app.post("/api/simulate-activity")
 async def simulate_activity():

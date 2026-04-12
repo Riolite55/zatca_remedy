@@ -20,6 +20,8 @@ def create_db():
             id TEXT PRIMARY KEY,
             username TEXT UNIQUE,
             password_hash TEXT,
+            role TEXT DEFAULT 'admin',
+            department TEXT,
             created_at DATETIME
         )
     ''')
@@ -70,19 +72,37 @@ def create_db():
         )
     ''')
 
-    # --- Seed admin user if not exists ---
-    c.execute("SELECT COUNT(*) FROM users WHERE username = 'admin'")
-    if c.fetchone()[0] == 0:
-        try:
-            from passlib.context import CryptContext
-            pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    # --- Migrate: add role/department columns if missing ---
+    existing_cols = [row[1] for row in c.execute("PRAGMA table_info(users)").fetchall()]
+    if "role" not in existing_cols:
+        c.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'admin'")
+    if "department" not in existing_cols:
+        c.execute("ALTER TABLE users ADD COLUMN department TEXT")
+
+    # --- Seed users if not exist ---
+    try:
+        from passlib.context import CryptContext
+        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+        # Admin user (global access, no department)
+        c.execute("SELECT COUNT(*) FROM users WHERE username = 'admin'")
+        if c.fetchone()[0] == 0:
             admin_id = str(uuid.uuid4())
             hashed_pw = pwd_context.hash("admin")
-            c.execute("INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)",
-                      (admin_id, "admin", hashed_pw, datetime.now().isoformat()))
+            c.execute("INSERT INTO users (id, username, password_hash, role, department, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                      (admin_id, "admin", hashed_pw, "admin", None, datetime.now().isoformat()))
             print("Seeded 'admin' user (password: admin)")
-        except Exception as e:
-            print(f"Could not seed admin user: {e}")
+
+        # Zakah Registration Manager (scoped to Zakah_Registration department)
+        c.execute("SELECT COUNT(*) FROM users WHERE username = 'zakah_manager'")
+        if c.fetchone()[0] == 0:
+            zakah_id = str(uuid.uuid4())
+            hashed_pw = pwd_context.hash("zakah_manager")
+            c.execute("INSERT INTO users (id, username, password_hash, role, department, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                      (zakah_id, "zakah_manager", hashed_pw, "manager", "Zakah_Registration", datetime.now().isoformat()))
+            print("Seeded 'zakah_manager' user (password: zakah_manager)")
+    except Exception as e:
+        print(f"Could not seed users: {e}")
 
     # --- Import Remedy data from Excel ---
     if not os.path.exists(EXCEL_PATH):
