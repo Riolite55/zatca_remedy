@@ -519,12 +519,9 @@ export default function Home() {
       if (!res) throw new Error("API Error");
       const data = await res.json();
       
-      const messageContent = data.follow_up
-        ? `${data.message}\n\nYou might also want to explore: ${data.follow_up}`
-        : data.message;
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: messageContent, charts: data.charts },
+        { role: "assistant", content: data.message, charts: data.charts, follow_up: data.follow_up },
       ]);
       
       if (!activeSessionId) {
@@ -848,6 +845,9 @@ export default function Home() {
                               
                               <TabsContent value="answer" className="p-5 m-0 text-slate-700 dark:text-slate-300 text-sm">
                                 <div className="mb-4 whitespace-pre-wrap">{msg.content}</div>
+                                {msg.follow_up && (
+                                  <p className="text-xs text-slate-400 italic mt-2">You might also want to explore: {msg.follow_up}</p>
+                                )}
                                 {msg.charts.filter(c => c.type === 'table').length > 0 && (
                                   <div className="mt-4 space-y-4">
                                     {msg.charts.filter(c => c.type === 'table').map((c, i) => (
@@ -900,6 +900,9 @@ export default function Home() {
                           ) : (
                             <div className="p-4 bg-white border border-slate-100 rounded-xl rounded-tl-sm text-sm text-slate-800 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-200">
                               {msg.content}
+                              {msg.follow_up && (
+                                <p className="text-xs text-slate-400 italic mt-2">You might also want to explore: {msg.follow_up}</p>
+                              )}
                             </div>
                           )}
                         </div>

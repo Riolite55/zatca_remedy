@@ -303,7 +303,7 @@ agent = Agent(
         "7. If they ask for a list of specific tickets, use a 'table'.\n"
         "8. Always use `AS count` or similar aliases in your SQL to make columns predictable.\n"
         "9. Do not wrap column names in quotes unless necessary.\n"
-        "10. You MUST always include a single relevant follow-up question in the `follow_up` field. It should logically follow from the current analysis — the one question the user would most naturally want to ask next."
+        "10. You MUST always include a single relevant follow-up question in the `follow_up` field. It should logically follow from the current analysis — the one question the user would most naturally want to ask next. IMPORTANT: The follow-up is displayed separately by the UI — do NOT mention it in your `message` field. Your message should only contain the analytical answer."
     )
 )
 
