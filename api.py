@@ -45,7 +45,7 @@ class ChartDef(BaseModel):
 class RemedyDashboard(BaseModel):
     message: str = Field(description="A brief analytical summary answering the user's question, placed at the top of the dashboard.")
     charts: List[ChartDef] = Field(description="A list of 1 to 3 charts/metrics to display to support the analysis.")
-    follow_ups: List[str] = Field(description="A list of natural follow-up questions that logically continue from the current analysis. Include as many as are relevant — focus on quality and relevance over quantity.")
+    follow_up: str = Field(description="A single natural follow-up question that logically continues from the current analysis. This will be appended to your message, so make it relevant and specific.")
 
 # -----------------------------------------
 # PydanticAI Agent Setup
@@ -303,7 +303,7 @@ agent = Agent(
         "7. If they ask for a list of specific tickets, use a 'table'.\n"
         "8. Always use `AS count` or similar aliases in your SQL to make columns predictable.\n"
         "9. Do not wrap column names in quotes unless necessary.\n"
-        "10. You MUST always include relevant follow-up questions in the `follow_ups` field. These should logically follow from the current analysis — questions the user would naturally want to ask next. Focus on relevance, not a fixed count."
+        "10. You MUST always include a single relevant follow-up question in the `follow_up` field. It should logically follow from the current analysis — the one question the user would most naturally want to ask next."
     )
 )
 
@@ -398,7 +398,7 @@ class ChatResponse(BaseModel):
     message: str
     charts: List[ChartResponse]
     session_id: str
-    follow_ups: List[str] = []
+    follow_up: str = ""
 
 class AuthRequest(BaseModel):
     username: str
@@ -550,7 +550,7 @@ async def chat_endpoint(request: ChatRequest, user_id: str = Depends(get_current
             message=dashboard.message,
             charts=populated_charts,
             session_id=session_id,
-            follow_ups=dashboard.follow_ups
+            follow_up=dashboard.follow_up
         )
         
     except Exception as e:

@@ -94,13 +94,13 @@ def create_db():
             print("Seeded 'admin' user (password: admin)")
 
         # Zakah Registration Manager (scoped to Zakah_Registration department)
-        c.execute("SELECT COUNT(*) FROM users WHERE username = 'zakah_manager'")
+        c.execute("SELECT COUNT(*) FROM users WHERE username = 'zakah_registration_manager'")
         if c.fetchone()[0] == 0:
             zakah_id = str(uuid.uuid4())
-            hashed_pw = pwd_context.hash("zakah_manager")
+            hashed_pw = pwd_context.hash("zakah_registration_manager")
             c.execute("INSERT INTO users (id, username, password_hash, role, department, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                      (zakah_id, "zakah_manager", hashed_pw, "manager", "Zakah_Registration", datetime.now().isoformat()))
-            print("Seeded 'zakah_manager' user (password: zakah_manager)")
+                      (zakah_id, "zakah_registration_manager", hashed_pw, "manager", "Zakah_Registration", datetime.now().isoformat()))
+            print("Seeded 'zakah_registration_manager' user (password: zakah_registration_manager)")
     except Exception as e:
         print(f"Could not seed users: {e}")
 

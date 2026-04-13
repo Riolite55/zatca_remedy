@@ -32,7 +32,7 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   charts?: ChartDef[];
-  follow_ups?: string[];
+  follow_up?: string;
 }
 
 interface KPI {
@@ -519,9 +519,12 @@ export default function Home() {
       if (!res) throw new Error("API Error");
       const data = await res.json();
       
+      const messageContent = data.follow_up
+        ? `${data.message}\n\nYou might also want to explore: ${data.follow_up}`
+        : data.message;
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: data.message, charts: data.charts, follow_ups: data.follow_ups },
+        { role: "assistant", content: messageContent, charts: data.charts },
       ]);
       
       if (!activeSessionId) {
@@ -903,17 +906,6 @@ export default function Home() {
                       )}
                     </div>
                   </div>
-                  {/* Follow-up questions — displayed as part of the chat */}
-                  {msg.role === 'assistant' && msg.follow_ups && msg.follow_ups.length > 0 && (
-                    <div className="ml-11 mt-2 p-3 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-lg text-sm text-slate-600 dark:text-slate-400">
-                      <p className="font-medium text-slate-500 dark:text-slate-400 mb-1.5">You might also want to explore:</p>
-                      <ul className="space-y-1">
-                        {msg.follow_ups.map((q, fi) => (
-                          <li key={fi} className="before:content-['•'] before:mr-2 before:text-[#2053a4]">{q}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
                   </div>
                 ))}
 
