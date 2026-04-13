@@ -74,6 +74,7 @@ const AnimatedChatPlaceholder = ({ kpis, suggestions, onSuggestionClick, usernam
     {/* KPI Banner */}
     {kpis.length > 0 && (
       <div className="w-full max-w-5xl">
+        <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Your KPIs</h4>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {kpis.map((kpi, i) => (
             <div key={i} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
@@ -92,6 +93,7 @@ const AnimatedChatPlaceholder = ({ kpis, suggestions, onSuggestionClick, usernam
     {/* Suggested Questions */}
     {suggestions.length > 0 && (
       <div className="w-full max-w-3xl">
+        <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Suggested for you</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {suggestions.map((q, i) => (
             <button
@@ -966,7 +968,7 @@ export default function Home() {
                   <Send size={16} className={input.trim() ? "translate-x-0.5 -translate-y-0.5" : ""} />
                 </Button>
               </div>
-              <p className="text-center text-xs text-slate-400 mt-3 font-medium">ZATCA Remedy AI can make mistakes. Check important info.</p>
+              <p className="text-center text-xs text-slate-400 mt-3 font-medium">ZATCA Remedy is powered by AI. Please double-check with official sources.</p>
             </div>
           </div>
         ) : (
