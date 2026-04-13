@@ -93,19 +93,19 @@ const AnimatedChatPlaceholder = ({ kpis, suggestions, onSuggestionClick, usernam
     {/* Suggested Questions */}
     {suggestions.length > 0 && (
       <div className="w-full max-w-3xl">
-        <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Suggested for you</h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Would you like to check these questions?</h4>
+        <ul className="space-y-2">
           {suggestions.map((q, i) => (
-            <button
-              key={i}
-              onClick={() => onSuggestionClick(q)}
-              className="text-left px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-[#2053a4] hover:bg-blue-50 dark:hover:bg-slate-800 transition-all text-sm text-slate-700 dark:text-slate-300 shadow-sm hover:shadow-md group"
-            >
-              <span className="text-[#2053a4] mr-2 group-hover:mr-3 transition-all">&#8594;</span>
-              {q}
-            </button>
+            <li key={i}>
+              <button
+                onClick={() => onSuggestionClick(q)}
+                className="text-sm text-[#2053a4] hover:text-[#1d3761] underline underline-offset-2 decoration-[#2053a4]/30 hover:decoration-[#2053a4] transition-all text-left"
+              >
+                {q}
+              </button>
+            </li>
           ))}
-        </div>
+        </ul>
       </div>
     )}
   </div>
@@ -495,10 +495,6 @@ export default function Home() {
   const activeChatDashboard = messages.filter(m => m.role === "assistant").pop();
 
   const handleSuggestionClick = (question: string) => {
-    setInput(question);
-  };
-
-  const handleFollowUpClick = (question: string) => {
     setInput(question);
   };
 
@@ -907,18 +903,15 @@ export default function Home() {
                       )}
                     </div>
                   </div>
-                  {/* Follow-up question chips — show only on the last assistant message */}
-                  {msg.role === 'assistant' && msg.follow_ups && msg.follow_ups.length > 0 && idx === messages.length - 1 && !loading && (
-                    <div className="flex flex-wrap gap-2 mt-2 ml-11">
-                      {msg.follow_ups.map((q, fi) => (
-                        <button
-                          key={fi}
-                          onClick={() => handleFollowUpClick(q)}
-                          className="text-xs px-3 py-1.5 rounded-full border border-[#2053a4]/30 bg-blue-50 dark:bg-slate-800 text-[#2053a4] dark:text-blue-300 hover:bg-[#2053a4] hover:text-white transition-all shadow-sm"
-                        >
-                          {q}
-                        </button>
-                      ))}
+                  {/* Follow-up questions — displayed as part of the chat */}
+                  {msg.role === 'assistant' && msg.follow_ups && msg.follow_ups.length > 0 && (
+                    <div className="ml-11 mt-2 p-3 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-lg text-sm text-slate-600 dark:text-slate-400">
+                      <p className="font-medium text-slate-500 dark:text-slate-400 mb-1.5">You might also want to explore:</p>
+                      <ul className="space-y-1">
+                        {msg.follow_ups.map((q, fi) => (
+                          <li key={fi} className="before:content-['•'] before:mr-2 before:text-[#2053a4]">{q}</li>
+                        ))}
+                      </ul>
                     </div>
                   )}
                   </div>

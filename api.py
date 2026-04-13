@@ -45,7 +45,7 @@ class ChartDef(BaseModel):
 class RemedyDashboard(BaseModel):
     message: str = Field(description="A brief analytical summary answering the user's question, placed at the top of the dashboard.")
     charts: List[ChartDef] = Field(description="A list of 1 to 3 charts/metrics to display to support the analysis.")
-    follow_ups: List[str] = Field(description="A list of 2-3 natural follow-up questions the user might want to ask next, based on the current analysis.")
+    follow_ups: List[str] = Field(description="A list of natural follow-up questions that logically continue from the current analysis. Include as many as are relevant — focus on quality and relevance over quantity.")
 
 # -----------------------------------------
 # PydanticAI Agent Setup
@@ -303,7 +303,7 @@ agent = Agent(
         "7. If they ask for a list of specific tickets, use a 'table'.\n"
         "8. Always use `AS count` or similar aliases in your SQL to make columns predictable.\n"
         "9. Do not wrap column names in quotes unless necessary.\n"
-        "10. You MUST always include 2-3 relevant follow-up questions in the `follow_ups` field. These should be natural next questions the user might want to explore based on the current analysis. Make them specific and actionable."
+        "10. You MUST always include relevant follow-up questions in the `follow_ups` field. These should logically follow from the current analysis — questions the user would naturally want to ask next. Focus on relevance, not a fixed count."
     )
 )
 
