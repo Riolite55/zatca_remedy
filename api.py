@@ -714,30 +714,30 @@ async def get_persona_kpis(user_id: str = Depends(get_current_user)):
             # Scoped KPIs for department manager
             df_total = pd.read_sql_query("SELECT COUNT(*) as value FROM hpd_help_desk WHERE ASSIGNED_GROUP = ?", conn, params=[department])
             df_open = pd.read_sql_query("SELECT COUNT(*) as value FROM hpd_help_desk WHERE ASSIGNED_GROUP = ? AND STATUS_DESCRIPTION NOT IN ('Closed','Resolved','Canceled')", conn, params=[department])
-            df_sla_met = pd.read_sql_query("SELECT COUNT(*) as value FROM hpd_help_desk WHERE ASSIGNED_GROUP = ? AND SLA_RESOLUTION_STATUS = 'Met'", conn, params=[department])
-            df_sla_missed = pd.read_sql_query("SELECT COUNT(*) as value FROM hpd_help_desk WHERE ASSIGNED_GROUP = ? AND SLA_RESOLUTION_STATUS = 'Missed'", conn, params=[department])
+            df_sla_within = pd.read_sql_query("SELECT COUNT(*) as value FROM hpd_help_desk WHERE ASSIGNED_GROUP = ? AND SLM_STATUS_DESCRIPTION = 'Within Service Target'", conn, params=[department])
+            df_sla_breached = pd.read_sql_query("SELECT COUNT(*) as value FROM hpd_help_desk WHERE ASSIGNED_GROUP = ? AND SLM_STATUS_DESCRIPTION = 'Service Target Breached'", conn, params=[department])
             df_top_assignee = pd.read_sql_query("SELECT ASSIGNEE as name, COUNT(*) as count FROM hpd_help_desk WHERE ASSIGNED_GROUP = ? AND ASSIGNEE IS NOT NULL AND ASSIGNEE != '' GROUP BY ASSIGNEE ORDER BY count DESC LIMIT 1", conn, params=[department])
 
             total = int(df_total.iloc[0]['value'])
-            sla_met = int(df_sla_met.iloc[0]['value'])
-            sla_missed = int(df_sla_missed.iloc[0]['value'])
-            sla_total = sla_met + sla_missed
-            sla_rate = round((sla_met / sla_total * 100), 1) if sla_total > 0 else 100.0
+            sla_within = int(df_sla_within.iloc[0]['value'])
+            sla_breached = int(df_sla_breached.iloc[0]['value'])
+            sla_total = sla_within + sla_breached
+            sla_rate = round((sla_within / sla_total * 100), 1) if sla_total > 0 else 100.0
 
             kpis = [
                 {"label": "Total Tickets", "value": total, "type": "number"},
                 {"label": "Open Tickets", "value": int(df_open.iloc[0]['value']), "type": "number"},
                 {"label": "SLA Met Rate", "value": f"{sla_rate}%", "type": "percentage"},
-                {"label": "SLA Breaches", "value": sla_missed, "type": "number"},
+                {"label": "SLA Breaches", "value": sla_breached, "type": "number"},
                 {"label": "Top Assignee", "value": f"{df_top_assignee.iloc[0]['name'].strip()} ({int(df_top_assignee.iloc[0]['count'])})" if not df_top_assignee.empty else "N/A", "type": "text"},
             ]
         else:
             # Global KPIs for admin
             df_total = pd.read_sql_query("SELECT COUNT(*) as value FROM hpd_help_desk", conn)
             df_open = pd.read_sql_query("SELECT COUNT(*) as value FROM hpd_help_desk WHERE STATUS_DESCRIPTION NOT IN ('Closed','Resolved','Canceled')", conn)
-            df_sla_breached = pd.read_sql_query("SELECT COUNT(*) as value FROM hpd_help_desk WHERE SLA_RESOLUTION_STATUS = 'Missed'", conn)
+            df_sla_breached = pd.read_sql_query("SELECT COUNT(*) as value FROM hpd_help_desk WHERE SLM_STATUS_DESCRIPTION = 'Service Target Breached'", conn)
             df_top_group = pd.read_sql_query("SELECT ASSIGNED_GROUP as name, COUNT(*) as count FROM hpd_help_desk GROUP BY ASSIGNED_GROUP ORDER BY count DESC LIMIT 1", conn)
-            df_breach_group = pd.read_sql_query("SELECT ASSIGNED_GROUP as name, COUNT(*) as count FROM hpd_help_desk WHERE SLA_RESOLUTION_STATUS = 'Missed' GROUP BY ASSIGNED_GROUP ORDER BY count DESC LIMIT 1", conn)
+            df_breach_group = pd.read_sql_query("SELECT ASSIGNED_GROUP as name, COUNT(*) as count FROM hpd_help_desk WHERE SLM_STATUS_DESCRIPTION = 'Service Target Breached' GROUP BY ASSIGNED_GROUP ORDER BY count DESC LIMIT 1", conn)
 
             kpis = [
                 {"label": "Total Tickets", "value": int(df_total.iloc[0]['value']), "type": "number"},

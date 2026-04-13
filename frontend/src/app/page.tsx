@@ -56,8 +56,21 @@ interface Session {
 const COLORS = ['#2053a4', '#4fbbbd', '#62b34f', '#0996d4', '#1d3761', '#f59e0b'];
 
 
-const AnimatedChatPlaceholder = ({ kpis, suggestions, onSuggestionClick }: { kpis: KPI[], suggestions: string[], onSuggestionClick: (q: string) => void }) => (
+const AnimatedChatPlaceholder = ({ kpis, suggestions, onSuggestionClick, username }: { kpis: KPI[], suggestions: string[], onSuggestionClick: (q: string) => void, username: string | null }) => (
   <div className="flex flex-col items-center justify-center w-full space-y-8 animate-in fade-in zoom-in duration-500 py-8">
+    {/* Icon + Greeting */}
+    <div className="flex flex-col items-center space-y-4">
+      <div className="relative w-24 h-24 flex items-center justify-center">
+        <div className="absolute w-12 h-12 bg-blue-100 dark:bg-slate-800 rounded-2xl rounded-tr-sm right-1 top-1 animate-[bounce_3s_infinite]" />
+        <div className="absolute w-14 h-14 bg-[#2053a4] rounded-2xl rounded-tl-sm left-1 bottom-1 animate-[bounce_3s_infinite_200ms] flex items-center justify-center shadow-lg">
+          <Sparkles className="text-white w-7 h-7 animate-pulse" />
+        </div>
+      </div>
+      <div className="space-y-2 text-center">
+        <h3 className="text-xl font-semibold text-[#1d3761] dark:text-slate-200 tracking-tight">Welcome, {username || "there"}</h3>
+      </div>
+    </div>
+
     {/* KPI Banner */}
     {kpis.length > 0 && (
       <div className="w-full max-w-5xl">
@@ -75,22 +88,6 @@ const AnimatedChatPlaceholder = ({ kpis, suggestions, onSuggestionClick }: { kpi
         </div>
       </div>
     )}
-
-    {/* Icon + Title */}
-    <div className="flex flex-col items-center space-y-4">
-      <div className="relative w-24 h-24 flex items-center justify-center">
-        <div className="absolute w-12 h-12 bg-blue-100 dark:bg-slate-800 rounded-2xl rounded-tr-sm right-1 top-1 animate-[bounce_3s_infinite]" />
-        <div className="absolute w-14 h-14 bg-[#2053a4] rounded-2xl rounded-tl-sm left-1 bottom-1 animate-[bounce_3s_infinite_200ms] flex items-center justify-center shadow-lg">
-          <Sparkles className="text-white w-7 h-7 animate-pulse" />
-        </div>
-      </div>
-      <div className="space-y-2 text-center">
-        <h3 className="text-xl font-semibold text-[#1d3761] dark:text-slate-200 tracking-tight">AI Analytical Chat</h3>
-        <p className="text-slate-500 text-sm max-w-sm mx-auto leading-relaxed">
-          Ask a question or pick a suggestion below to get started.
-        </p>
-      </div>
-    </div>
 
     {/* Suggested Questions */}
     {suggestions.length > 0 && (
@@ -821,7 +818,7 @@ export default function Home() {
 
             <ScrollArea className="flex-1 p-4 bg-slate-50/50 dark:bg-transparent min-h-0">
               <div className="flex flex-col gap-4 pb-4">
-                {messages.length === 0 && <AnimatedChatPlaceholder kpis={kpis} suggestions={suggestions} onSuggestionClick={handleSuggestionClick} />}
+                {messages.length === 0 && <AnimatedChatPlaceholder kpis={kpis} suggestions={suggestions} onSuggestionClick={handleSuggestionClick} username={username} />}
                 
                 {messages.map((msg, idx) => (
                   <div key={idx}>
