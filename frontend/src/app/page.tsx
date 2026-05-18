@@ -92,14 +92,14 @@ const AnimatedChatPlaceholder = ({ kpis, suggestions, onSuggestionClick, usernam
 
     {/* Suggested Questions */}
     {suggestions.length > 0 && (
-      <div className="w-full max-w-3xl">
-        <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Would you like to check these questions?</h4>
-        <ul className="space-y-2">
+      <div className="w-full max-w-5xl mt-4">
+        <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Would you like to deep dive into your data?</h4>
+        <ul className="space-y-2 pl-0">
           {suggestions.map((q, i) => (
-            <li key={i}>
+            <li key={i} className="list-none">
               <button
                 onClick={() => onSuggestionClick(q)}
-                className="text-sm text-[#2053a4] hover:text-[#1d3761] underline underline-offset-2 decoration-[#2053a4]/30 hover:decoration-[#2053a4] transition-all text-left"
+                className="text-sm text-[#2053a4] hover:text-[#1d3761] transition-all text-left"
               >
                 {q}
               </button>
@@ -845,10 +845,7 @@ export default function Home() {
                               
                               <TabsContent value="answer" className="p-5 m-0 text-slate-700 dark:text-slate-300 text-sm">
                                 <div className="mb-4 whitespace-pre-wrap">{msg.content}</div>
-                                {msg.follow_up && (
-                                  <p className="text-xs text-slate-400 italic mt-2">You might also want to explore: {msg.follow_up}</p>
-                                )}
-                                {msg.charts.filter(c => c.type === 'table').length > 0 && (
+                                                                {msg.charts.filter(c => c.type === 'table').length > 0 && (
                                   <div className="mt-4 space-y-4">
                                     {msg.charts.filter(c => c.type === 'table').map((c, i) => (
                                        <div key={i} className="border border-slate-100 rounded-lg overflow-hidden">
@@ -900,15 +897,17 @@ export default function Home() {
                           ) : (
                             <div className="p-4 bg-white border border-slate-100 rounded-xl rounded-tl-sm text-sm text-slate-800 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-200">
                               {msg.content}
-                              {msg.follow_up && (
-                                <p className="text-xs text-slate-400 italic mt-2">You might also want to explore: {msg.follow_up}</p>
-                              )}
                             </div>
                           )}
                         </div>
                       )}
                     </div>
                   </div>
+                  {msg.role === 'assistant' && msg.follow_up && (
+                    <div className="ml-[4.25rem] mt-2">
+                      <p className="text-sm text-slate-700 dark:text-slate-300">{msg.follow_up}</p>
+                    </div>
+                  )}
                   </div>
                 ))}
 
